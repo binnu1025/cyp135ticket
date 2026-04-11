@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>雁群報到</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --forest:#2d5a3d;--moss:#4a7c59;--sage:#7aab87;--mist:#c8ddc2;
+  --cream:#f5f2eb;--bark:#6b4f3a;--stone:#8a8478;--paper:#faf8f3;
+  --ink:#2a2620;--warn:#c17f3a;--err:#8b4040;
+}
+html,body{height:100%;background:var(--cream);color:var(--ink);font-family:'Noto Sans TC',sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column;min-height:100dvh}
+
+.header{background:var(--forest);padding:16px 20px 12px;flex-shrink:0;position:relative;overflow:hidden}
+.header::before{content:'';position:absolute;top:-30px;right:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.06)}
+.header::after{content:'';position:absolute;bottom:-40px;left:10px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.04)}
+.header-inner{position:relative;z-index:1;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.header-tag{font-size:10px;letter-spacing:.18em;color:var(--mist);text-transform:uppercase;margin-bottom:4px}
+.header-event{font-size:17px;font-weight:700;color:#fff;line-height:1.3}
+.header-date{font-size:11px;color:rgba(200,221,194,.7);margin-top:3px}
+.counter{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:8px 14px;text-align:center;flex-shrink:0;min-width:58px}
+.counter-num{font-size:24px;font-weight:900;color:#fff;line-height:1}
+.counter-lbl{font-size:9px;letter-spacing:.1em;color:var(--mist);margin-top:2px}
+
+.status-bar{background:var(--moss);padding:6px 20px;font-size:11px;color:rgba(255,255,255,.7);flex-shrink:0;display:flex;align-items:center;gap:6px}
+.status-dot{width:6px;height:6px;border-radius:50%;background:#888;flex-shrink:0}
+
+.tabs{display:flex;background:var(--paper);border-bottom:1px solid rgba(45,90,61,.12);flex-shrink:0}
+.tab{flex:1;padding:11px 4px;border:none;background:none;font-family:'Noto Sans TC',sans-serif;font-size:11px;font-weight:500;color:var(--stone);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.tab.active{color:var(--forest);border-bottom-color:var(--forest)}
+
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:var(--cream)}
+.panel{display:none;padding:16px}
+.panel.active{display:block}
+
+/* 掃描 */
+.scanner-card{background:var(--paper);border:1px solid rgba(45,90,61,.1);border-radius:16px;overflow:hidden;margin-bottom:14px}
+.scanner-wrap{position:relative;background:#1a2a1e;aspect-ratio:1}
+#qr-reader{width:100%!important;border:none!important}
+#qr-reader video{width:100%!important;height:100%!important;object-fit:cover}
+#qr-reader img{display:none!important}
+#qr-reader *{border:none!important}
+.scan-overlay{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.scan-frame{width:54%;aspect-ratio:1;position:relative}
+.scan-frame::before,.scan-frame::after,.scan-frame span::before,.scan-frame span::after{content:'';position:absolute;width:20px;height:20px;border-color:var(--sage);border-style:solid}
+.scan-frame::before{top:0;left:0;border-width:2px 0 0 2px;border-radius:3px 0 0 0}
+.scan-frame::after{top:0;right:0;border-width:2px 2px 0 0;border-radius:0 3px 0 0}
+.scan-frame span::before{bottom:0;left:0;border-width:0 0 2px 2px;border-radius:0 0 0 3px}
+.scan-frame span::after{bottom:0;right:0;border-width:0 2px 2px 0;border-radius:0 0 3px 0}
+.scan-line{position:absolute;left:4px;right:4px;top:4px;height:1.5px;background:linear-gradient(90deg,transparent,var(--sage),transparent);animation:scan 2s ease-in-out infinite;opacity:.9}
+@keyframes scan{0%{top:4px;opacity:0}10%{opacity:.9}90%{opacity:.9}100%{top:calc(100% - 4px);opacity:0}}
+.scanner-hint{padding:12px 16px;font-size:12px;color:var(--stone);text-align:center}
+
+.manual-row{display:flex;gap:8px;margin-bottom:14px}
+.code-input{flex:1;background:var(--paper);border:1px solid rgba(45,90,61,.2);border-radius:10px;padding:11px 14px;color:var(--ink);font-family:'Noto Sans TC',sans-serif;font-size:18px;letter-spacing:.15em;text-transform:uppercase;outline:none;transition:border-color .15s;min-width:0}
+.code-input:focus{border-color:var(--moss)}
+.code-input::placeholder{font-size:13px;letter-spacing:0;color:var(--stone)}
+.confirm-btn{background:var(--forest);color:#fff;border:none;border-radius:10px;padding:11px 18px;font-family:'Noto Sans TC',sans-serif;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
+.confirm-btn:active{background:var(--moss)}
+
+.result-card{border-radius:14px;padding:18px 20px;margin-bottom:14px;display:none;animation:slideUp .25s ease}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.result-card.show{display:block}
+.result-card.ok{background:#edf7ee;border:1px solid #a8d5a2}
+.result-card.dup{background:#fef6e4;border:1px solid #e8c87a}
+.result-card.err{background:#fdf0f0;border:1px solid #d4a0a0}
+.result-tag{font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:6px;font-weight:700}
+.result-card.ok .result-tag{color:var(--forest)}
+.result-card.dup .result-tag{color:var(--warn)}
+.result-card.err .result-tag{color:var(--err)}
+.result-name{font-size:28px;font-weight:900;line-height:1.1;margin-bottom:4px}
+.result-card.ok .result-name{color:var(--forest)}
+.result-card.dup .result-name{color:var(--warn)}
+.result-card.err .result-name{color:var(--err)}
+.result-meta{font-size:12px;color:var(--stone);display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+
+/* 名單 */
+.flock-section{margin-bottom:16px}
+.flock-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--forest);border-radius:10px;margin-bottom:6px}
+.flock-name{font-size:13px;font-weight:700;color:#fff}
+.flock-badge{background:rgba(255,255,255,.18);border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;color:#fff}
+.member-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--paper);border:1px solid rgba(45,90,61,.08);border-radius:8px;margin-bottom:4px}
+.member-item.checked{background:#edf7ee;border-color:rgba(74,124,89,.2)}
+.member-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:#ddd}
+.member-item.checked .member-dot{background:var(--moss)}
+.member-name{font-size:14px;font-weight:500;flex:1}
+.member-item.checked .member-name{color:var(--forest)}
+.member-time{font-size:10px;color:var(--stone)}
+
+/* 統計 */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.stat-card{background:var(--paper);border:1px solid rgba(45,90,61,.1);border-radius:12px;padding:14px;text-align:center}
+.stat-num{font-size:32px;font-weight:900;color:var(--forest);line-height:1}
+.stat-lbl{font-size:11px;color:var(--stone);margin-top:4px}
+.stat-rate{font-size:13px;font-weight:700;color:var(--moss);margin-top:2px}
+.flock-stat-item{background:var(--paper);border:1px solid rgba(45,90,61,.08);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.flock-stat-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.flock-stat-name{font-size:13px;font-weight:700;color:var(--forest)}
+.flock-stat-pct{font-size:13px;font-weight:700;color:var(--moss)}
+.progress-bg{background:#e0edd8;border-radius:999px;height:6px;overflow:hidden}
+.progress-fill{background:var(--moss);height:100%;border-radius:999px;transition:width .4s ease}
+
+/* 手動 */
+.search-wrap{background:var(--paper);border:1px solid rgba(45,90,61,.15);border-radius:10px;display:flex;align-items:center;gap:8px;padding:10px 14px;margin-bottom:12px}
+.search-input{flex:1;border:none;background:none;font-family:'Noto Sans TC',sans-serif;font-size:14px;color:var(--ink);outline:none}
+.search-input::placeholder{color:var(--stone)}
+.manual-item{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:var(--paper);border:1px solid rgba(45,90,61,.08);border-radius:10px;margin-bottom:6px}
+.manual-item.checked{background:#edf7ee;border-color:rgba(74,124,89,.25)}
+.manual-left{display:flex;flex-direction:column;gap:2px}
+.manual-name{font-size:15px;font-weight:500}
+.manual-item.checked .manual-name{color:var(--forest)}
+.manual-sub{font-size:11px;color:var(--stone)}
+.check-btn{background:var(--paper);border:1px solid rgba(45,90,61,.2);border-radius:8px;padding:6px 14px;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:700;color:var(--forest);cursor:pointer;flex-shrink:0}
+.manual-item.checked .check-btn{background:var(--forest);color:#fff;border-color:var(--forest)}
+
+/* 無權限 */
+.forbidden{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:40px 24px;text-align:center;gap:12px}
+.forbidden-icon{font-size:52px}
+.forbidden-title{font-size:18px;font-weight:700;color:var(--forest)}
+.forbidden-sub{font-size:13px;color:var(--stone);line-height:1.8}
+
+/* Loading / Toast */
+.loading{display:none;position:fixed;inset:0;background:rgba(42,38,32,.6);z-index:200;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+.loading.show{display:flex}
+.spinner{width:32px;height:32px;border:2px solid rgba(255,255,255,.2);border-top-color:var(--mist);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-txt{font-size:13px;color:var(--mist)}
+.toast{position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 20px);left:50%;transform:translateX(-50%) translateY(16px);background:var(--ink);color:#fff;border-radius:999px;padding:9px 20px;font-size:13px;white-space:nowrap;opacity:0;transition:all .25s;z-index:300;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="header-left">
+      <div class="header-tag">雁群課程系統</div>
+      <div class="header-event" id="event-name">載入中...</div>
+      <div class="header-date" id="event-date"></div>
+    </div>
+    <div class="counter">
+      <div class="counter-num" id="counter-num">0</div>
+      <div class="counter-lbl">已報到</div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <div class="status-dot" id="status-dot"></div>
+  <span id="status-txt">連線中...</span>
+</div>
+
+<div class="tabs" id="tabs" style="display:none">
+  <button class="tab active" onclick="switchTab('scan')">掃描</button>
+  <button class="tab" onclick="switchTab('list')">名單</button>
+  <button class="tab" onclick="switchTab('stats')">統計</button>
+  <button class="tab" onclick="switchTab('manual')">手動</button>
+</div>
+
+<div class="content" id="content" style="display:none">
+  <div class="panel active" id="panel-scan">
+    <div class="scanner-card">
+      <div class="scanner-wrap">
+        <div id="qr-reader"></div>
+        <div class="scan-overlay"><div class="scan-frame"><span></span><div class="scan-line"></div></div></div>
+      </div>
+      <div class="scanner-hint">對準學員票券上的 QR Code</div>
+    </div>
+    <div id="result-card" class="result-card">
+      <div class="result-tag" id="result-tag"></div>
+      <div class="result-name" id="result-name"></div>
+      <div class="result-meta" id="result-meta"></div>
+    </div>
+    <div class="manual-row">
+      <input class="code-input" id="code-input" maxlength="6" placeholder="手動輸入 CODE" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="confirm-btn" onclick="submitCode(document.getElementById('code-input').value)">確認</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel-list">
+    <div id="list-content"><div style="text-align:center;padding:40px;color:var(--stone);font-size:13px">載入名單中...</div></div>
+  </div>
+
+  <div class="panel" id="panel-stats">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num" id="s-total">0</div><div class="stat-lbl">總報名人數</div></div>
+      <div class="stat-card"><div class="stat-num" id="s-checked">0</div><div class="stat-lbl">已報到</div><div class="stat-rate" id="s-rate">0%</div></div>
+    </div>
+    <div id="flock-stats"></div>
+  </div>
+
+  <div class="panel" id="panel-manual">
+    <div class="search-wrap">
+      <span style="color:var(--stone);font-size:15px;flex-shrink:0">⌕</span>
+      <input class="search-input" id="search-input" placeholder="搜尋姓名或小組..." oninput="filterManual(this.value)">
+    </div>
+    <div id="manual-list"><div style="text-align:center;padding:40px;color:var(--stone);font-size:13px">載入中...</div></div>
+  </div>
+</div>
+
+<div class="forbidden" id="forbidden" style="display:none">
+  <div class="forbidden-icon">🌿</div>
+  <div class="forbidden-title">您沒有報到掃描權限</div>
+  <div class="forbidden-sub">請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內</div>
+</div>
+
+<div class="loading" id="loading"><div class="spinner"></div><div class="loading-txt" id="loading-txt">驗證中...</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+const LIFF_ID = 'YOUR_LIFF_ID';
+
+let _token = '', _userId = '', _members = [], _checkedCt = 0;
+let _scanner = null, _scanCool = false;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  document.getElementById('code-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') submitCode(e.target.value);
+  });
+
+  // LIFF 登入取得 UID
+  try {
+    await liff.init({ liffId: LIFF_ID });
+    if (!liff.isLoggedIn()) { liff.login(); return; }
+    const profile = await liff.getProfile();
+    _userId = profile.userId;
+  } catch(e) { _userId = 'dev-test'; }
+
+  // 讀取活動資訊
+  try {
+    const res  = await fetch(GAS_URL + '?action=getActiveEvent');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      _token = data.token;
+      document.getElementById('event-name').textContent = data.eventName;
+      document.getElementById('event-date').textContent = [data.session, data.ticketType].filter(Boolean).join(' · ') + (data.dateStr ? '　' + data.dateStr : '');
+      document.getElementById('status-dot').style.background = '#a8d5a2';
+      document.getElementById('status-txt').textContent = '活動進行中';
+    } else {
+      document.getElementById('event-name').textContent = '目前沒有開放活動';
+      document.getElementById('status-txt').textContent = '活動未開放';
+    }
+  } catch(e) {
+    document.getElementById('event-name').textContent = '載入失敗';
+    document.getElementById('status-txt').textContent = '無法連線';
+  }
+
+  // 驗證掃碼權限（用 GAS 比對掃碼權限表）
+  const allowed = await checkPermission(_userId);
+  if (!allowed) {
+    document.getElementById('forbidden').style.display = 'flex';
+    return;
+  }
+
+  document.getElementById('tabs').style.display = 'flex';
+  document.getElementById('content').style.display = 'block';
+  initScanner();
+  await loadMembers();
+});
+
+async function checkPermission(uid) {
+  try {
+    const res  = await fetch(GAS_URL + '?action=checkPermission&userId=' + encodeURIComponent(uid));
+    const data = await res.json();
+    return data.allowed === true;
+  } catch(e) { return true; }
+}
+
+function initScanner() {
+  _scanner = new Html5Qrcode('qr-reader');
+  _scanner.start(
+    { facingMode: 'environment' },
+    { fps: 10, qrbox: { width: 220, height: 220 }, aspectRatio: 1 },
+    code => { if (!_scanCool) { _scanCool = true; submitCode(code.trim().toUpperCase()); setTimeout(() => { _scanCool = false; }, 3000); } },
+    () => {}
+  ).catch(() => {
+    document.querySelector('.scanner-wrap').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--sage);font-size:13px;text-align:center;padding:20px">無法存取相機<br>請使用下方手動輸入</div>';
+  });
+}
+
+async function submitCode(code) {
+  code = code.trim().toUpperCase();
+  if (!code || code.length < 4) { showToast('請輸入完整 CODE'); return; }
+  showLoading('驗證中...');
+  document.getElementById('code-input').value = '';
+  try {
+    const res  = await fetch(GAS_URL, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'checkin', code, token: _token, userId: _userId, checkedBy: 'scan' })
+    });
+    const data = await res.json();
+    showResult(data);
+    if (data.status === 'ok') { _checkedCt++; document.getElementById('counter-num').textContent = _checkedCt; await loadMembers(); }
+  } catch(e) { showResult({ status: 'error', message: '網路錯誤，請重試' }); }
+  finally { hideLoading(); }
+}
+
+function showResult(data) {
+  const card = document.getElementById('result-card');
+  card.className = 'result-card show';
+  if (data.status === 'ok') {
+    card.classList.add('ok');
+    document.getElementById('result-tag').textContent  = '✓ 報到成功';
+    document.getElementById('result-name').textContent = data.name;
+    document.getElementById('result-meta').innerHTML   = `<span>${data.flock}</span><span>${nowTime()}</span>`;
+    vibrate([40,20,40]);
+  } else if (data.status === 'duplicate') {
+    card.classList.add('dup');
+    document.getElementById('result-tag').textContent  = '⚠ 已報到過';
+    document.getElementById('result-name').textContent = data.name;
+    document.getElementById('result-meta').innerHTML   = `<span>首次報到：${data.firstCheckin}</span>`;
+    vibrate([150]);
+  } else if (data.status === 'forbidden') {
+    card.classList.add('err');
+    document.getElementById('result-tag').textContent  = '✕ 無掃碼權限';
+    document.getElementById('result-name').textContent = '請聯絡會長';
+    document.getElementById('result-meta').innerHTML   = '';
+  } else {
+    card.classList.add('err');
+    document.getElementById('result-tag').textContent  = '✕ 查無報名記錄';
+    document.getElementById('result-name').textContent = '請再次掃描';
+    document.getElementById('result-meta').innerHTML   = `<span>${data.message || ''}</span>`;
+    vibrate([80,40,80]);
+  }
+  setTimeout(() => { card.className = 'result-card'; }, 4000);
+}
+
+async function loadMembers() {
+  try {
+    const res  = await fetch(`${GAS_URL}?action=getMembers`);
+    const data = await res.json();
+    _members   = data.members || [];
+    _checkedCt = _members.filter(m => m.checked).length;
+    document.getElementById('counter-num').textContent = _checkedCt;
+    renderList(); renderStats(); renderManual(_members);
+  } catch(e) {}
+}
+
+function renderList() {
+  const groups = {};
+  _members.forEach(m => { if (!groups[m.flock]) groups[m.flock] = []; groups[m.flock].push(m); });
+  let html = '';
+  Object.keys(groups).sort().forEach(flock => {
+    const list = groups[flock], checked = list.filter(m => m.checked).length;
+    const pct  = list.length ? Math.round(checked / list.length * 100) : 0;
+    html += `<div class="flock-section"><div class="flock-header"><span class="flock-name">${flock}</span><span style="font-size:11px;color:var(--mist)">${checked}/${list.length}人</span><span class="flock-badge">${pct}%</span></div>`;
+    list.forEach(m => {
+      html += `<div class="member-item ${m.checked?'checked':''}"><div class="member-dot"></div><div class="member-name">${m.name}</div><div class="member-time">${m.time ? m.time.slice(11,16) : '未報到'}</div></div>`;
+    });
+    html += '</div>';
+  });
+  document.getElementById('list-content').innerHTML = html || '<div style="text-align:center;padding:40px;color:var(--stone);font-size:13px">名單是空的</div>';
+}
+
+function renderStats() {
+  const total = _members.length, checked = _members.filter(m => m.checked).length;
+  const rate  = total ? Math.round(checked / total * 100) : 0;
+  document.getElementById('s-total').textContent   = total;
+  document.getElementById('s-checked').textContent = checked;
+  document.getElementById('s-rate').textContent    = rate + '%';
+  const groups = {};
+  _members.forEach(m => { if (!groups[m.flock]) groups[m.flock] = {total:0,checked:0}; groups[m.flock].total++; if (m.checked) groups[m.flock].checked++; });
+  let html = '';
+  Object.keys(groups).sort().forEach(flock => {
+    const g = groups[flock], pct = g.total ? Math.round(g.checked/g.total*100) : 0;
+    html += `<div class="flock-stat-item"><div class="flock-stat-header"><span class="flock-stat-name">${flock}</span><span class="flock-stat-pct">${g.checked}/${g.total}人　${pct}%</span></div><div class="progress-bg"><div class="progress-fill" style="width:${pct}%"></div></div></div>`;
+  });
+  document.getElementById('flock-stats').innerHTML = html;
+}
+
+function renderManual(list) {
+  document.getElementById('manual-list').innerHTML = list.length
+    ? list.map((m,i) => `<div class="manual-item ${m.checked?'checked':''}" id="mi-${i}"><div class="manual-left"><div class="manual-name">${m.name}</div><div class="manual-sub">${m.flock} · ${m.code}</div></div><button class="check-btn" onclick="manualCheckin(${i})">${m.checked?'已報到':'報到'}</button></div>`).join('')
+    : '<div style="text-align:center;padding:40px;color:var(--stone);font-size:13px">無符合結果</div>';
+}
+
+function filterManual(q) {
+  renderManual(_members.filter(m => m.name.includes(q) || m.flock.includes(q) || m.code.includes(q.toUpperCase())));
+}
+
+async function manualCheckin(idx) {
+  const m = _members[idx];
+  if (m.checked) { showToast(m.name + ' 已報到'); return; }
+  showLoading('報到中...');
+  try {
+    const res  = await fetch(GAS_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'checkin', code:m.code, token:_token, userId:_userId, checkedBy:'manual' }) });
+    const data = await res.json();
+    if (data.status === 'ok') { showToast(m.name + ' 報到完成'); _checkedCt++; document.getElementById('counter-num').textContent = _checkedCt; await loadMembers(); }
+    else showToast(data.message || '操作失敗');
+  } catch(e) { showToast('網路錯誤'); } finally { hideLoading(); }
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', ['scan','list','stats','manual'][i]===tab));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + tab).classList.add('active');
+}
+
+function showLoading(txt) { document.getElementById('loading-txt').textContent = txt||'處理中...'; document.getElementById('loading').classList.add('show'); }
+function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+function showToast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+function nowTime() { return new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function vibrate(p) { if (navigator.vibrate) navigator.vibrate(p); }
+</script>
+</body>
+</html>
