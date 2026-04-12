@@ -231,6 +231,27 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   } catch(e) { document.getElementById('ev-name').textContent = '載入失敗，請重試'; }
 
+  // ── 驗證掃碼權限 ──
+  try {
+    const permRes = await fetch(GAS + '?action=checkPermission&userId=' + encodeURIComponent(_userId));
+    const permData = await permRes.json();
+    if (!permData.allowed) {
+      // 無權限：隱藏所有分頁，顯示無權限畫面
+      document.querySelector('.tabs').style.display = 'none';
+      document.querySelector('.body').innerHTML =
+        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+        'min-height:60vh;padding:40px;text-align:center;gap:16px">' +
+        '<div style="font-size:48px">🌿</div>' +
+        '<div style="font-size:18px;font-weight:700;color:var(--green)">您沒有掃碼權限</div>' +
+        '<div style="font-size:13px;color:var(--stone);line-height:1.8">請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內</div>' +
+        '</div>';
+      return;
+    }
+  } catch(e) {
+    // 查詢失敗時放行（避免網路問題擋住合法用戶）
+    console.warn('權限查詢失敗，放行');
+  }
+
   startScanner();
   await loadMembers();
 });
