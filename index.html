@@ -305,23 +305,39 @@ function startScanner() {
 async function submit(code) {
   code = code.trim().toUpperCase();
   if (!code || code.length < 4) { toast('請輸入完整 CODE'); return; }
-  loading('驗證中...');
   document.getElementById('ci').value = '';
-  try {
-    const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code));
-    const d = await r.json();
-    showResult(d);
-    if (d.status === 'ok') {
-      checked++;
-      document.getElementById('ct').textContent = checked;
-      // 只更新那一筆，不重載整個名單（速度快很多）
-      var m = members.find(function(x){ return x.code === code; });
-      if (m) { m.checked = true; m.time = d.time || new Date().toLocaleString('zh-TW'); }
-      else await loadMembers();
-      renderList(); renderStats(); renderManual(members);
-    }
-  } catch(e) { showResult({ status: 'error', message: '網路錯誤，請重試' }); }
-  finally { unload(); }
+
+  // ── 本地比對（瞬間）──
+  var found = members.find(function(x){ return x.code === code; });
+
+  if (!found) {
+    // 名單裡找不到
+    showResult({ status: 'error', message: '查無報名記錄' });
+    return;
+  }
+
+  if (found.checked) {
+    // 已報到過
+    showResult({ status: 'duplicate', name: found.name, flock: found.flock, firstCheckin: found.time });
+    return;
+  }
+
+  // 本地先標記報到，立刻顯示成功
+  var now = new Date();
+  var timeStr = (now.getMonth()+1+'').padStart(2,'0') + '/' +
+                (now.getDate()+'').padStart(2,'0') + ' ' +
+                (now.getHours()+'').padStart(2,'0') + ':' +
+                (now.getMinutes()+'').padStart(2,'0');
+  found.checked = true;
+  found.time    = timeStr;
+  checked++;
+  document.getElementById('ct').textContent = checked;
+  showResult({ status: 'ok', name: found.name, flock: found.flock, time: timeStr });
+  renderList(); renderStats(); renderManual(members);
+
+  // ── 背景寫入 GAS（不擋畫面）──
+  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code))
+    .catch(function(e){ console.warn('GAS 寫入失敗:', e); });
 }
 
 function showResult(d) {
@@ -331,13 +347,13 @@ function showResult(d) {
     el.classList.add('ok');
     document.getElementById('r-tag').textContent  = '✓  報到成功';
     document.getElementById('r-name').textContent = d.name;
-    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>${d.time ? d.time.slice(11,16) : ''}</span>`;
+    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>${d.time ? formatTime(d.time) : ''}</span>`;
     vib([40,20,40]); beep('ok');
   } else if (d.status === 'duplicate') {
     el.classList.add('dup');
     document.getElementById('r-tag').textContent  = '⚠  已報到過';
     document.getElementById('r-name').textContent = d.name;
-    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>首次：${d.firstCheckin ? d.firstCheckin.slice(11,16) : ''}</span>`;
+    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>首次：${d.firstCheckin ? formatTime(d.firstCheckin) : ''}</span>`;
     vib([150]); beep('dup');
   } else {
     el.classList.add('err');
@@ -423,13 +439,23 @@ function filterM(q) {
 async function manualCk(i) {
   const m = members[i];
   if (m.checked) { toast(m.name + ' 已報到'); return; }
-  loading('報到中...');
-  try {
-    const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code));
-    const d = await r.json();
-    if (d.status==='ok') { toast(m.name + ' 報到完成'); checked++; document.getElementById('ct').textContent=checked; await loadMembers(); }
-    else toast(d.message || '操作失敗');
-  } catch(e) { toast('網路錯誤'); } finally { unload(); }
+
+  // 本地立刻標記
+  var now = new Date();
+  var timeStr = (now.getMonth()+1+'').padStart(2,'0') + '/' +
+                (now.getDate()+'').padStart(2,'0') + ' ' +
+                (now.getHours()+'').padStart(2,'0') + ':' +
+                (now.getMinutes()+'').padStart(2,'0');
+  m.checked = true;
+  m.time    = timeStr;
+  checked++;
+  document.getElementById('ct').textContent = checked;
+  toast(m.name + ' 報到完成');
+  renderList(); renderStats(); renderManual(members);
+
+  // 背景寫入 GAS
+  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code))
+    .catch(function(e){ console.warn('GAS 寫入失敗:', e); });
 }
 
 // ══ UI 工具 ════════════════════════════════════════════
