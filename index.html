@@ -137,7 +137,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 <div class="hd">
   <div class="hd-inner">
     <div>
-      <div class="hd-label">雁群課程系統</div>
+      <div class="hd-label">CYP135 票務系統</div>
       <div class="hd-event" id="ev-name">載入中...</div>
       <div class="hd-sub" id="ev-sub"></div>
     </div>
@@ -400,16 +400,20 @@ function renderManual(list) {
 
 function formatTime(t) {
   if (!t) return '未報到';
-  // 格式：yyyy/MM/dd HH:mm:ss 或 yyyy-MM-ddTHH:mm:ss
-  var m = t.match(/(\d{1,2})[:\-](\d{2})/g);
-  if (m && m.length >= 2) return m[0] + ':' + m[1].split(/[:\-]/)[1];
-  // 嘗試直接取 HH:mm
-  var parts = t.replace('T',' ').split(' ');
-  if (parts.length >= 2) {
-    var time = parts[1].substring(0,5);
-    if (time.match(/^\d{2}:\d{2}$/)) return time;
-  }
-  return t.substring(0, 16);
+  try {
+    var d = new Date(t);
+    if (isNaN(d.getTime())) {
+      // 格式 yyyy/MM/dd HH:mm:ss
+      var parts = t.split(' ');
+      if (parts.length >= 2) return parts[0].slice(5) + ' ' + parts[1].slice(0,5);
+      return t.slice(0,16);
+    }
+    var M = d.getMonth()+1;
+    var D = d.getDate();
+    var h = d.getHours();
+    var m = d.getMinutes();
+    return (M<10?'0'+M:M) + '/' + (D<10?'0'+D:D) + ' ' + (h<10?'0'+h:h) + ':' + (m<10?'0'+m:m);
+  } catch(e) { return t.slice(0,16); }
 }
 
 function filterM(q) {
