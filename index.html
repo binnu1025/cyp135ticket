@@ -253,8 +253,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  startScanner();
+  // 先載入名單，再啟動相機（讓名單先準備好）
   await loadMembers();
+  startScanner();
 });
 
 // ══ 掃描器 ═════════════════════════════════════════════
@@ -288,7 +289,15 @@ async function submit(code) {
     const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code));
     const d = await r.json();
     showResult(d);
-    if (d.status === 'ok') { checked++; document.getElementById('ct').textContent = checked; await loadMembers(); }
+    if (d.status === 'ok') {
+      checked++;
+      document.getElementById('ct').textContent = checked;
+      // 只更新那一筆，不重載整個名單（速度快很多）
+      var m = members.find(function(x){ return x.code === code; });
+      if (m) { m.checked = true; m.time = d.time || new Date().toLocaleString('zh-TW'); }
+      else await loadMembers();
+      renderList(); renderStats(); renderManual(members);
+    }
   } catch(e) { showResult({ status: 'error', message: '網路錯誤，請重試' }); }
   finally { unload(); }
 }
@@ -338,7 +347,7 @@ function renderList() {
     const list=g[f], ck=list.filter(m=>m.checked).length;
     h += `<div style="margin-bottom:14px"><div class="flock-hd"><span class="flock-nm">${f}</span><span class="flock-ct">${ck}/${list.length} 人</span></div>`;
     list.forEach(m => {
-      h += `<div class="mb ${m.checked?'ck':''}"><div class="dot"></div><div class="mn">${m.name}</div><div class="mt">${m.time ? m.time.slice(11,16) : '未報到'}</div></div>`;
+      h += `<div class="mb ${m.checked?'ck':''}"><div class="dot"></div><div class="mn">${m.name}</div><div class="mt">${m.time ? formatTime(m.time) : '未報到'}</div></div>`;
     });
     h += '</div>';
   });
@@ -365,6 +374,20 @@ function renderManual(list) {
   document.getElementById('manual-body').innerHTML = list.length
     ? list.map((m,i) => `<div class="mi ${m.checked?'ck':''}" id="mi${i}"><div class="ml"><div class="mln">${m.name}</div><div class="mls">${m.flock} · ${m.code}</div></div><button class="cb" onclick="manualCk(${i})">${m.checked?'已報到':'報到'}</button></div>`).join('')
     : '<div style="text-align:center;padding:40px;font-size:13px;color:var(--stone)">無符合結果</div>';
+}
+
+function formatTime(t) {
+  if (!t) return '未報到';
+  // 格式：yyyy/MM/dd HH:mm:ss 或 yyyy-MM-ddTHH:mm:ss
+  var m = t.match(/(\d{1,2})[:\-](\d{2})/g);
+  if (m && m.length >= 2) return m[0] + ':' + m[1].split(/[:\-]/)[1];
+  // 嘗試直接取 HH:mm
+  var parts = t.replace('T',' ').split(' ');
+  if (parts.length >= 2) {
+    var time = parts[1].substring(0,5);
+    if (time.match(/^\d{2}:\d{2}$/)) return time;
+  }
+  return t.substring(0, 16);
 }
 
 function filterM(q) {
