@@ -332,19 +332,19 @@ function showResult(d) {
     document.getElementById('r-tag').textContent  = '✓  報到成功';
     document.getElementById('r-name').textContent = d.name;
     document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>${d.time ? d.time.slice(11,16) : ''}</span>`;
-    vib([40,20,40]);
+    vib([40,20,40]); beep('ok');
   } else if (d.status === 'duplicate') {
     el.classList.add('dup');
     document.getElementById('r-tag').textContent  = '⚠  已報到過';
     document.getElementById('r-name').textContent = d.name;
     document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>首次：${d.firstCheckin ? d.firstCheckin.slice(11,16) : ''}</span>`;
-    vib([150]);
+    vib([150]); beep('dup');
   } else {
     el.classList.add('err');
     document.getElementById('r-tag').textContent  = '✕  查無報名記錄';
     document.getElementById('r-name').textContent = '請再次掃描';
     document.getElementById('r-meta').innerHTML   = `<span>${d.message||''}</span>`;
-    vib([80,40,80]);
+    vib([80,40,80]); beep('err');
   }
   setTimeout(() => { el.className = 'result'; }, 4000);
 }
@@ -443,6 +443,46 @@ function loading(t) { document.getElementById('ld-t').textContent=t||'處理中.
 function unload() { document.getElementById('ld').classList.remove('on'); }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2200); }
 function vib(p) { if(navigator.vibrate) navigator.vibrate(p); }
+
+function beep(type) {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    if (type === 'ok') {
+      // 成功：兩聲短促高音
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.15);
+      var o2 = ctx.createOscillator();
+      var g2 = ctx.createGain();
+      o2.connect(g2); g2.connect(ctx.destination);
+      o2.frequency.value = 1100;
+      g2.gain.setValueAtTime(0.3, ctx.currentTime + 0.18);
+      g2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      o2.start(ctx.currentTime + 0.18);
+      o2.stop(ctx.currentTime + 0.35);
+    } else if (type === 'dup') {
+      // 重複：一聲中音
+      o.frequency.value = 660;
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.3);
+    } else {
+      // 失敗：一聲低沉長音
+      o.frequency.value = 220;
+      o.type = 'sawtooth';
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.4);
+    }
+  } catch(e) {}
+}
 </script>
 </body>
 </html>
