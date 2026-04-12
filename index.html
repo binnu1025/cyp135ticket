@@ -212,11 +212,28 @@ let members=[], checked=0, token='', cool=false, scanner=null;
 window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ci').addEventListener('keydown', e => { if(e.key==='Enter') submit(e.target.value); });
 
-  // LIFF 初始化
+  // LIFF 初始化並取得 UID
+  var _userId = '';
   try {
     await liff.init({ liffId: LIFF });
     if (!liff.isLoggedIn()) { liff.login(); return; }
-  } catch(e) {}
+    const profile = await liff.getProfile();
+    _userId = profile.userId;
+  } catch(e) {
+    _userId = '';
+  }
+
+  // UID 取得失敗就擋住
+  if (!_userId) {
+    document.querySelector('.tabs').style.display = 'none';
+    document.querySelector('.body').innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:40px;text-align:center;gap:16px">' +
+      '<div style="font-size:48px">🌿</div>' +
+      '<div style="font-size:18px;font-weight:700;color:var(--green)">無法取得身分</div>' +
+      '<div style="font-size:13px;color:var(--stone);line-height:1.8">請在 LINE 內開啟此頁面</div>' +
+      '</div>';
+    return;
+  }
 
   // 讀活動資訊
   try {
