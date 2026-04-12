@@ -231,25 +231,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   } catch(e) { document.getElementById('ev-name').textContent = '載入失敗，請重試'; }
 
-  // ── 驗證掃碼權限 ──
+  // ── 驗證掃碼權限（嚴格模式）──
+  var allowed = false;
   try {
     const permRes = await fetch(GAS + '?action=checkPermission&userId=' + encodeURIComponent(_userId));
     const permData = await permRes.json();
-    if (!permData.allowed) {
-      // 無權限：隱藏所有分頁，顯示無權限畫面
-      document.querySelector('.tabs').style.display = 'none';
-      document.querySelector('.body').innerHTML =
-        '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-        'min-height:60vh;padding:40px;text-align:center;gap:16px">' +
-        '<div style="font-size:48px">🌿</div>' +
-        '<div style="font-size:18px;font-weight:700;color:var(--green)">您沒有掃碼權限</div>' +
-        '<div style="font-size:13px;color:var(--stone);line-height:1.8">請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內</div>' +
-        '</div>';
-      return;
-    }
+    allowed = permData.allowed === true;
   } catch(e) {
-    // 查詢失敗時放行（避免網路問題擋住合法用戶）
-    console.warn('權限查詢失敗，放行');
+    allowed = false;
+  }
+
+  if (!allowed) {
+    document.querySelector('.tabs').style.display = 'none';
+    document.querySelector('.body').innerHTML =
+      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+      'min-height:60vh;padding:40px;text-align:center;gap:16px">' +
+      '<div style="font-size:48px">🌿</div>' +
+      '<div style="font-size:18px;font-weight:700;color:var(--green)">您沒有掃碼權限</div>' +
+      '<div style="font-size:13px;color:var(--stone);line-height:1.8">請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內</div>' +
+      '</div>';
+    return;
   }
 
   startScanner();
@@ -259,6 +260,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 // ══ 掃描器 ═════════════════════════════════════════════
 function startScanner() {
   scanner = new Html5Qrcode('qr');
+  // 先請求相機權限，讓瀏覽器記住（之後不再詢問）
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then(function(stream) {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+      }).catch(function() {});
+  }
   scanner.start(
     { facingMode: 'environment' },
     { fps: 10, qrbox: { width: 210, height: 210 }, aspectRatio: 1 },
@@ -280,16 +288,9 @@ async function submit(code) {
     const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code));
     const d = await r.json();
     showResult(d);
-    if (d.status === 'ok') {
-      checked++;
-      document.getElementById('ct').textContent = checked;
-      await loadMembers();
-    }
-  } catch(e) {
-    showResult({ status: 'error', message: '網路錯誤，請重試' });
-  } finally {
-    unload();
-  }
+    if (d.status === 'ok') { checked++; document.getElementById('ct').textContent = checked; await loadMembers(); }
+  } catch(e) { showResult({ status: 'error', message: '網路錯誤，請重試' }); }
+  finally { unload(); }
 }
 
 function showResult(d) {
@@ -375,7 +376,7 @@ async function manualCk(i) {
   if (m.checked) { toast(m.name + ' 已報到'); return; }
   loading('報到中...');
   try {
-    const r = await fetch(GAS, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'checkin', code: m.code }) });
+    const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code));
     const d = await r.json();
     if (d.status==='ok') { toast(m.name + ' 報到完成'); checked++; document.getElementById('ct').textContent=checked; await loadMembers(); }
     else toast(d.message || '操作失敗');
