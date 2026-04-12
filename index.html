@@ -277,16 +277,19 @@ async function submit(code) {
   loading('驗證中...');
   document.getElementById('ci').value = '';
   try {
-    const r = await fetch(GAS, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'checkin', code })
-    });
+    const r = await fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code));
     const d = await r.json();
     showResult(d);
-    if (d.status === 'ok') { checked++; document.getElementById('ct').textContent = checked; await loadMembers(); }
-  } catch(e) { showResult({ status: 'error', message: '網路錯誤，請重試' }); }
-  finally { unload(); }
+    if (d.status === 'ok') {
+      checked++;
+      document.getElementById('ct').textContent = checked;
+      await loadMembers();
+    }
+  } catch(e) {
+    showResult({ status: 'error', message: '網路錯誤，請重試' });
+  } finally {
+    unload();
+  }
 }
 
 function showResult(d) {
