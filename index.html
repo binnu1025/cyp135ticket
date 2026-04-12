@@ -223,6 +223,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     _userId = '';
   }
 
+  // debug：顯示取到的 UID
+  document.getElementById('ev-sub').textContent = 'UID: ' + _userId;
+
   // UID 取得失敗就擋住
   if (!_userId) {
     document.querySelector('.tabs').style.display = 'none';
@@ -254,8 +257,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     const permRes = await fetch(GAS + '?action=checkPermission&userId=' + encodeURIComponent(_userId));
     const permData = await permRes.json();
     allowed = permData.allowed === true;
+    console.log('checkPermission result:', permData, 'userId sent:', _userId);
   } catch(e) {
     allowed = false;
+    console.log('checkPermission error:', e);
   }
 
   if (!allowed) {
