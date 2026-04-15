@@ -208,11 +208,15 @@ const LIFF = '2009773305-tsZtDMOz';
 
 let members=[], checked=0, token='', cool=false, scanner=null;
 
+
 // ══ 初始化 ═════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('ci').addEventListener('keydown', e => { if(e.key==='Enter') submit(e.target.value); });
 
-  // LIFF 初始化並取得 UID
+  // 1. 先顯示 Loading 狀態
+  loading('系統啟動中...');
+
+  // 2. LIFF 初始化取得 UID
   var _userId = '';
   try {
     await liff.init({ liffId: LIFF });
@@ -223,62 +227,62 @@ window.addEventListener('DOMContentLoaded', async () => {
     _userId = '';
   }
 
-  // debug：顯示取到的 UID
   document.getElementById('ev-sub').textContent = 'UID: ' + _userId;
 
-  // UID 取得失敗就擋住
   if (!_userId) {
-    document.querySelector('.tabs').style.display = 'none';
-    document.querySelector('.body').innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:40px;text-align:center;gap:16px">' +
-      '<div style="font-size:48px">🌿</div>' +
-      '<div style="font-size:18px;font-weight:700;color:var(--green)">無法取得身分</div>' +
-      '<div style="font-size:13px;color:var(--stone);line-height:1.8">請在 LINE 內開啟此頁面</div>' +
-      '</div>';
+    unload();
+    showErrorScreen('無法取得身分', '請在 LINE 內開啟此頁面');
     return;
   }
 
-  // 讀活動資訊
+  // 3. 【關鍵優化】一次性向 GAS 請求所有必要資料 (活動、權限、名單)
   try {
-    const r = await fetch(GAS + '?action=getActiveEvent');
-    const d = await r.json();
-    if (d.status === 'ok') {
-      document.getElementById('ev-name').textContent = d.eventName || '活動';
-      const sub = [d.session, d.ticketType].filter(Boolean).join(' · ');
-      document.getElementById('ev-sub').textContent  = sub + (d.dateStr ? '　' + d.dateStr : '');
+    const res = await fetch(GAS + '?action=getInitData&userId=' + encodeURIComponent(_userId));
+    const data = await res.json();
+
+    // 處理權限 (如果沒權限，直接擋下，不要開相機)
+    if (!data.allowed) {
+      unload();
+      showErrorScreen('您沒有掃碼權限', '請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內');
+      return;
+    }
+
+    // 處理活動資訊
+    if (data.event && data.event.status === 'ok') {
+      document.getElementById('ev-name').textContent = data.event.eventName || '活動';
+      const sub = [data.event.session, data.event.ticketType].filter(Boolean).join(' · ');
+      document.getElementById('ev-sub').textContent  = sub + (data.event.dateStr ? '　' + data.event.dateStr : '');
     } else {
       document.getElementById('ev-name').textContent = '目前沒有開放活動';
     }
-  } catch(e) { document.getElementById('ev-name').textContent = '載入失敗，請重試'; }
 
-  // ── 驗證掃碼權限（嚴格模式）──
-  var allowed = false;
-  try {
-    const permRes = await fetch(GAS + '?action=checkPermission&userId=' + encodeURIComponent(_userId));
-    const permData = await permRes.json();
-    allowed = permData.allowed === true;
-    console.log('checkPermission result:', permData, 'userId sent:', _userId);
+    // 處理名單
+    members = data.members || [];
+    checked = members.filter(m => m.checked).length;
+    document.getElementById('ct').textContent = checked;
+    renderList(); renderStats(); renderManual(members);
+
   } catch(e) {
-    allowed = false;
-    console.log('checkPermission error:', e);
+    console.error(e);
+    document.getElementById('ev-name').textContent = '資料載入失敗，請重整頁面';
   }
 
-  if (!allowed) {
-    document.querySelector('.tabs').style.display = 'none';
-    document.querySelector('.body').innerHTML =
-      '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-      'min-height:60vh;padding:40px;text-align:center;gap:16px">' +
-      '<div style="font-size:48px">🌿</div>' +
-      '<div style="font-size:18px;font-weight:700;color:var(--green)">您沒有掃碼權限</div>' +
-      '<div style="font-size:13px;color:var(--stone);line-height:1.8">請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內</div>' +
-      '</div>';
-    return;
-  }
-
-  // 先載入名單，再啟動相機（讓名單先準備好）
-  await loadMembers();
-  startScanner();
+  // 4. 資料拿完，關閉 Loading 並啟動相機
+  unload();
+  startScanner(); 
 });
+
+function showErrorScreen(title, desc) {
+  document.querySelector('.tabs').style.display = 'none';
+  document.querySelector('.body').innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:40px;text-align:center;gap:16px">' +
+    '<div style="font-size:48px">🌿</div>' +
+    '<div style="font-size:18px;font-weight:700;color:var(--green)">' + title + '</div>' +
+    '<div style="font-size:13px;color:var(--stone);line-height:1.8">' + desc + '</div>' +
+    '</div>';
+}
+
+// ══ 掃描器 ═════════════════════════════════════════════
 
 // ══ 掃描器 ═════════════════════════════════════════════
 function startScanner() {
