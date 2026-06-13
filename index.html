@@ -208,7 +208,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 const GAS  = 'https://script.google.com/macros/s/AKfycbzlEBM9PCjfGW-QC3w0ILIaQ9-yjvPPLnLxzT_5QD-zjsjSbnpEQcgDg6uyNvjd1vIt/exec';
 const LIFF = '2009773305-tsZtDMOz';
 
-let members=[], checked=0, token='', cool=false, scanner=null;
+let members=[], checked=0, token='', cool=false, scanner=null, scannerName='';
 
 
 // ══ 初始化 ═════════════════════════════════════════════
@@ -225,6 +225,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     _userId = profile.userId;
+    scannerName = profile.displayName || '';
   } catch(e) {
     _userId = '';
   }
@@ -324,7 +325,7 @@ async function submit(code) {
 
   if (found.checked) {
     // 已報到過
-    showResult({ status: 'duplicate', name: found.name, flock: found.flock, group: found.group, room: found.room, firstCheckin: found.time });
+    showResult({ status: 'duplicate', name: found.name, flock: found.flock, group: found.group, room: found.room, firstCheckin: found.time, scanner: found.scanner });
     return;
   }
 
@@ -336,13 +337,14 @@ async function submit(code) {
                 (now.getMinutes()+'').padStart(2,'0');
   found.checked = true;
   found.time    = timeStr;
+  found.scanner = scannerName;
   checked++;
   document.getElementById('ct').textContent = checked;
-  showResult({ status: 'ok', name: found.name, flock: found.flock, group: found.group, room: found.room, time: timeStr });
+  showResult({ status: 'ok', name: found.name, flock: found.flock, group: found.group, room: found.room, time: timeStr, scanner: scannerName });
   renderList(); renderStats(); renderManual(members);
 
   // ── 背景寫入 GAS（不擋畫面）──
-  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code))
+  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code) + '&scanner=' + encodeURIComponent(scannerName))
     .catch(function(e){ console.warn('GAS 寫入失敗:', e); });
 }
 
@@ -363,7 +365,8 @@ function showResult(d) {
     el.classList.add('dup');
     document.getElementById('r-tag').textContent  = '⚠  已報到過';
     document.getElementById('r-name').textContent = d.name;
-    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span>${roomTag}<span>首次：${d.firstCheckin ? formatTime(d.firstCheckin) : ''}</span>`;
+    const byTag = d.scanner ? `<span>登記人：${d.scanner}</span>` : '';
+    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span>${roomTag}<span>首次：${d.firstCheckin ? formatTime(d.firstCheckin) : ''}</span>${byTag}`;
     vib([150]); beep('dup');
   } else {
     el.classList.add('err');
@@ -459,13 +462,14 @@ async function manualCk(i) {
                 (now.getMinutes()+'').padStart(2,'0');
   m.checked = true;
   m.time    = timeStr;
+  m.scanner = scannerName;
   checked++;
   document.getElementById('ct').textContent = checked;
   toast(m.name + ' 報到完成');
   renderList(); renderStats(); renderManual(members);
 
   // 背景寫入 GAS
-  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code))
+  fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code) + '&scanner=' + encodeURIComponent(scannerName))
     .catch(function(e){ console.warn('GAS 寫入失敗:', e); });
 }
 
