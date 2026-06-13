@@ -83,6 +83,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .result.dup .r-name{color:var(--dup-tx)}
 .result.err .r-name{color:var(--err-tx)}
 .r-meta{font-size:12px;color:var(--stone);display:flex;gap:12px;margin-top:5px;flex-wrap:wrap}
+.r-room{display:inline-flex;align-items:center;gap:4px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(244,180,0,.18);color:#7a5d00;border:1px solid rgba(244,180,0,.35)}
 
 /* List */
 .flock-hd{display:flex;align-items:center;justify-content:space-between;background:var(--green);border-radius:9px;padding:7px 12px;margin-bottom:5px}
@@ -95,6 +96,7 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .mn{font-size:13px;font-weight:500;flex:1}
 .mb.ck .mn{color:var(--green)}
 .mt{font-size:10px;color:var(--stone)}
+.mroom{font-size:10px;color:var(--moss);background:rgba(74,124,89,.1);border-radius:999px;padding:2px 7px;flex-shrink:0}
 
 /* Stats */
 .sg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
@@ -322,7 +324,7 @@ async function submit(code) {
 
   if (found.checked) {
     // 已報到過
-    showResult({ status: 'duplicate', name: found.name, flock: found.flock, firstCheckin: found.time });
+    showResult({ status: 'duplicate', name: found.name, flock: found.flock, group: found.group, room: found.room, firstCheckin: found.time });
     return;
   }
 
@@ -336,7 +338,7 @@ async function submit(code) {
   found.time    = timeStr;
   checked++;
   document.getElementById('ct').textContent = checked;
-  showResult({ status: 'ok', name: found.name, flock: found.flock, time: timeStr });
+  showResult({ status: 'ok', name: found.name, flock: found.flock, group: found.group, room: found.room, time: timeStr });
   renderList(); renderStats(); renderManual(members);
 
   // ── 背景寫入 GAS（不擋畫面）──
@@ -347,17 +349,21 @@ async function submit(code) {
 function showResult(d) {
   const el = document.getElementById('result');
   el.className = 'result show';
+
+  // 教室別標籤（若有資料才顯示）
+  const roomTag = d.room ? `<span class="r-room">教室：${d.room}</span>` : '';
+
   if (d.status === 'ok') {
     el.classList.add('ok');
     document.getElementById('r-tag').textContent  = '✓  報到成功';
     document.getElementById('r-name').textContent = d.name;
-    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>${d.time ? formatTime(d.time) : ''}</span>`;
+    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span>${roomTag}<span>${d.time ? formatTime(d.time) : ''}</span>`;
     vib([40,20,40]); beep('ok');
   } else if (d.status === 'duplicate') {
     el.classList.add('dup');
     document.getElementById('r-tag').textContent  = '⚠  已報到過';
     document.getElementById('r-name').textContent = d.name;
-    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span><span>首次：${d.firstCheckin ? formatTime(d.firstCheckin) : ''}</span>`;
+    document.getElementById('r-meta').innerHTML   = `<span>${d.flock}</span>${roomTag}<span>首次：${d.firstCheckin ? formatTime(d.firstCheckin) : ''}</span>`;
     vib([150]); beep('dup');
   } else {
     el.classList.add('err');
@@ -389,7 +395,8 @@ function renderList() {
     const list=g[f], ck=list.filter(m=>m.checked).length;
     h += `<div style="margin-bottom:14px"><div class="flock-hd"><span class="flock-nm">${f}</span><span class="flock-ct">${ck}/${list.length} 人</span></div>`;
     list.forEach(m => {
-      h += `<div class="mb ${m.checked?'ck':''}"><div class="dot"></div><div class="mn">${m.name}</div><div class="mt">${m.time ? formatTime(m.time) : '未報到'}</div></div>`;
+      const roomTag = m.room ? `<div class="mroom">${m.room}</div>` : '';
+      h += `<div class="mb ${m.checked?'ck':''}"><div class="dot"></div><div class="mn">${m.name}</div>${roomTag}<div class="mt">${m.time ? formatTime(m.time) : '未報到'}</div></div>`;
     });
     h += '</div>';
   });
@@ -414,7 +421,7 @@ function renderStats() {
 
 function renderManual(list) {
   document.getElementById('manual-body').innerHTML = list.length
-    ? list.map((m,i) => `<div class="mi ${m.checked?'ck':''}" id="mi${i}"><div class="ml"><div class="mln">${m.name}</div><div class="mls">${m.flock} · ${m.code}</div></div><button class="cb" onclick="manualCk(${i})">${m.checked?'已報到':'報到'}</button></div>`).join('')
+    ? list.map((m,i) => `<div class="mi ${m.checked?'ck':''}" id="mi${i}"><div class="ml"><div class="mln">${m.name}</div><div class="mls">${m.flock}${m.room ? ' · '+m.room : ''} · ${m.code}</div></div><button class="cb" onclick="manualCk(${i})">${m.checked?'已報到':'報到'}</button></div>`).join('')
     : '<div style="text-align:center;padding:40px;font-size:13px;color:var(--stone)">無符合結果</div>';
 }
 
