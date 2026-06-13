@@ -220,12 +220,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // 2. LIFF 初始化取得 UID
   var _userId = '';
+  var _displayName = '';
   try {
     await liff.init({ liffId: LIFF });
     if (!liff.isLoggedIn()) { liff.login(); return; }
     const profile = await liff.getProfile();
     _userId = profile.userId;
-    scannerName = profile.displayName || '';
+    _displayName = profile.displayName || '';  // 備援：掃碼權限表查不到姓名時使用
   } catch(e) {
     _userId = '';
   }
@@ -249,6 +250,9 @@ window.addEventListener('DOMContentLoaded', async () => {
       showErrorScreen('您沒有掃碼權限', '請聯絡會長開通掃碼權限<br>確認您的 LINE 帳號已在授權名單內');
       return;
     }
+
+    // 掃碼人員姓名：優先使用掃碼權限表中登記的姓名，查不到才用 LINE 顯示名稱
+    scannerName = (data.scannerName && data.scannerName.trim()) || _displayName || '';
 
     // 處理活動資訊
     if (data.event && data.event.status === 'ok') {
