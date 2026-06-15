@@ -275,6 +275,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     checked = members.filter(m => m.checked).length;
     document.getElementById('ct').textContent = checked;
     renderList(); renderStats(); renderManual();
+
+  } catch(e) {
+    console.error(e);
     document.getElementById('ev-name').textContent = '資料載入失敗，請重整頁面';
   }
 
