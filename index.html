@@ -115,6 +115,9 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .sw{display:flex;align-items:center;gap:8px;background:var(--paper);border:1px solid rgba(45,90,61,.14);border-radius:9px;padding:9px 13px;margin-bottom:11px}
 .si{flex:1;border:none;background:none;font-family:'Noto Sans TC',sans-serif;font-size:13px;color:var(--ink);outline:none}
 .si::placeholder{color:var(--stone)}
+.seg{display:flex;gap:6px;margin-bottom:11px}
+.seg-btn{flex:1;padding:8px;border:1px solid rgba(45,90,61,.18);background:var(--paper);border-radius:9px;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:700;color:var(--stone);cursor:pointer;transition:all .15s}
+.seg-btn.on{background:var(--green);color:#fff;border-color:var(--green)}
 .mi{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--paper);border:1px solid rgba(45,90,61,.07);border-radius:9px;margin-bottom:5px}
 .mi.ck{background:#edf7ee;border-color:rgba(74,124,89,.2)}
 .ml{display:flex;flex-direction:column;gap:1px}
@@ -193,7 +196,11 @@ body{display:flex;flex-direction:column;min-height:100dvh}
   <div class="pane" id="pane-manual">
     <div class="sw">
       <span style="color:var(--stone);font-size:14px">⌕</span>
-      <input class="si" id="si" placeholder="搜尋姓名或小組..." oninput="filterM(this.value)">
+      <input class="si" id="si" placeholder="搜尋姓名或小組..." oninput="filterM()">
+    </div>
+    <div class="seg" id="manual-filter">
+      <button class="seg-btn on" onclick="setManualFilter('unchecked', event)">未報到</button>
+      <button class="seg-btn" onclick="setManualFilter('all', event)">全部</button>
     </div>
     <div id="manual-body"><div style="text-align:center;padding:40px;font-size:13px;color:var(--stone)">載入中...</div></div>
   </div>
@@ -267,16 +274,16 @@ window.addEventListener('DOMContentLoaded', async () => {
     members = data.members || [];
     checked = members.filter(m => m.checked).length;
     document.getElementById('ct').textContent = checked;
-    renderList(); renderStats(); renderManual(members);
-
-  } catch(e) {
-    console.error(e);
+    renderList(); renderStats(); renderManual();
     document.getElementById('ev-name').textContent = '資料載入失敗，請重整頁面';
   }
 
   // 4. 資料拿完，關閉 Loading 並啟動相機
   unload();
-  startScanner(); 
+  startScanner();
+
+  // 5. 啟動定期背景同步，讓多裝置間的名單狀態保持接近一致
+  setInterval(loadMembers, 15000);
 });
 
 function showErrorScreen(title, desc) {
@@ -345,7 +352,7 @@ async function submit(code) {
   checked++;
   document.getElementById('ct').textContent = checked;
   showResult({ status: 'ok', name: found.name, flock: found.flock, group: found.group, room: found.room, time: timeStr, scanner: scannerName });
-  renderList(); renderStats(); renderManual(members);
+  renderList(); renderStats(); renderManual();
 
   // ── 背景寫入 GAS（不擋畫面）──
   fetch(GAS + '?action=checkin&code=' + encodeURIComponent(code) + '&scanner=' + encodeURIComponent(scannerName))
@@ -382,16 +389,29 @@ function showResult(d) {
   setTimeout(() => { el.className = 'result'; }, 4000);
 }
 
-// ══ 載入名單 ═══════════════════════════════════════════
+// ══ 載入名單（定期背景同步用）══════════════════════════
 async function loadMembers() {
   try {
     const r = await fetch(GAS + '?action=getMembers');
     const d = await r.json();
-    members = d.members || [];
+    const fresh = d.members || [];
+
+    // 以 code 為 key 合併：若本地已標記報到但 GAS 尚未寫入完成，保留本地的報到資訊
+    const localMap = {};
+    members.forEach(m => { if (m.checked) localMap[m.code] = m; });
+    fresh.forEach(m => {
+      if (!m.checked && localMap[m.code]) {
+        m.checked = true;
+        m.time    = localMap[m.code].time;
+        m.scanner = localMap[m.code].scanner;
+      }
+    });
+
+    members = fresh;
     checked = members.filter(m => m.checked).length;
     document.getElementById('ct').textContent = checked;
-    renderList(); renderStats(); renderManual(members);
-  } catch(e) {}
+    renderList(); renderStats(); renderManual();
+  } catch(e) { console.warn('同步名單失敗:', e); }
 }
 
 function renderList() {
@@ -426,9 +446,29 @@ function renderStats() {
   document.getElementById('flock-stats').innerHTML = h;
 }
 
-function renderManual(list) {
+// 手動分頁篩選狀態：'unchecked' = 只顯示未報到, 'all' = 全部
+let manualFilter = 'unchecked';
+
+function setManualFilter(mode, evt) {
+  manualFilter = mode;
+  document.querySelectorAll('#manual-filter .seg-btn').forEach(b => b.classList.remove('on'));
+  if (evt && evt.target) evt.target.classList.add('on');
+  renderManual();
+}
+
+function getManualList() {
+  const q = (document.getElementById('si') || {value:''}).value || '';
+  return members.filter(m => {
+    if (manualFilter === 'unchecked' && m.checked) return false;
+    if (q && !(m.name.includes(q) || m.flock.includes(q) || m.code.includes(q.toUpperCase()))) return false;
+    return true;
+  });
+}
+
+function renderManual() {
+  const list = getManualList();
   document.getElementById('manual-body').innerHTML = list.length
-    ? list.map((m,i) => `<div class="mi ${m.checked?'ck':''}" id="mi${i}"><div class="ml"><div class="mln">${m.name}</div><div class="mls">${m.flock}${m.room ? ' · '+m.room : ''} · ${m.code}</div></div><button class="cb" onclick="manualCk(${i})">${m.checked?'已報到':'報到'}</button></div>`).join('')
+    ? list.map(m => `<div class="mi ${m.checked?'ck':''}"><div class="ml"><div class="mln">${m.name}</div><div class="mls">${m.flock}${m.room ? ' · '+m.room : ''} · ${m.code}</div></div><button class="cb" onclick="manualCk('${m.code}')">${m.checked?'已報到':'報到'}</button></div>`).join('')
     : '<div style="text-align:center;padding:40px;font-size:13px;color:var(--stone)">無符合結果</div>';
 }
 
@@ -450,13 +490,13 @@ function formatTime(t) {
   } catch(e) { return t.slice(0,16); }
 }
 
-function filterM(q) {
-  renderManual(members.filter(m => m.name.includes(q)||m.flock.includes(q)||m.code.includes(q.toUpperCase())));
+function filterM() {
+  renderManual();
 }
 
-async function manualCk(i) {
-  const m = members[i];
-  if (m.checked) { toast(m.name + ' 已報到'); return; }
+async function manualCk(code) {
+  const m = members.find(x => x.code === code);
+  if (!m || m.checked) { toast((m?m.name:'') + ' 已報到'); return; }
 
   // 本地立刻標記
   var now = new Date();
@@ -470,7 +510,7 @@ async function manualCk(i) {
   checked++;
   document.getElementById('ct').textContent = checked;
   toast(m.name + ' 報到完成');
-  renderList(); renderStats(); renderManual(members);
+  renderList(); renderStats(); renderManual();
 
   // 背景寫入 GAS
   fetch(GAS + '?action=checkin&code=' + encodeURIComponent(m.code) + '&scanner=' + encodeURIComponent(scannerName))
