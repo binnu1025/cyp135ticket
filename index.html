@@ -118,6 +118,14 @@ body{display:flex;flex-direction:column;min-height:100dvh}
 .seg{display:flex;gap:6px;margin-bottom:11px}
 .seg-btn{flex:1;padding:8px;border:1px solid rgba(45,90,61,.18);background:var(--paper);border-radius:9px;font-family:'Noto Sans TC',sans-serif;font-size:12px;font-weight:700;color:var(--stone);cursor:pointer;transition:all .15s}
 .seg-btn.on{background:var(--green);color:#fff;border-color:var(--green)}
+.save-log{margin-top:18px;padding:14px;border:1px solid rgba(45,90,61,.18);border-radius:12px;background:var(--paper)}
+.save-log .sl-t{font-size:13px;font-weight:700;color:var(--green);margin-bottom:4px}
+.save-log .sl-d{font-size:11px;line-height:1.6;color:var(--stone);margin-bottom:10px}
+.save-log .sl-b{width:100%;padding:12px;border:0;border-radius:9px;background:var(--green);color:#fff;font-family:'Noto Sans TC',sans-serif;font-size:14px;font-weight:700;cursor:pointer}
+.save-log .sl-b:disabled{opacity:.5;cursor:default}
+.save-log .sl-r{margin-top:10px;font-size:12px;line-height:1.6;white-space:pre-wrap;color:var(--stone)}
+.save-log .sl-r.ok{color:var(--green)}
+.save-log .sl-r.err{color:#B3261E}
 .mi{display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:var(--paper);border:1px solid rgba(45,90,61,.07);border-radius:9px;margin-bottom:5px}
 .mi.ck{background:#edf7ee;border-color:rgba(74,124,89,.2)}
 .ml{display:flex;flex-direction:column;gap:1px}
@@ -191,6 +199,12 @@ body{display:flex;flex-direction:column;min-height:100dvh}
       <div class="sc"><div class="sn" id="s-ck">0</div><div class="sl">已報到</div><div class="sr" id="s-rt">0%</div></div>
     </div>
     <div id="flock-stats"></div>
+    <div class="save-log">
+      <div class="sl-t">寫回報到紀錄</div>
+      <div class="sl-d">現場報到只存在這一份即時名單裡。按一下把報到時間和掃描人員抄進「QR票券紀錄」永久保存。<br>只寫這兩欄，不會動到名單本身，隨時可以按、按幾次都一樣。</div>
+      <button class="sl-b" id="sl-btn" onclick="saveCheckinLog()">寫回報到紀錄</button>
+      <div class="sl-r" id="sl-res"></div>
+    </div>
   </div>
 
   <div class="pane" id="pane-manual">
@@ -216,6 +230,9 @@ const GAS  = 'https://script.google.com/macros/s/AKfycbzlEBM9PCjfGW-QC3w0ILIaQ9-
 const LIFF = '2009773305-tsZtDMOz';
 
 let members=[], checked=0, token='', cool=false, scanner=null, scannerName='';
+// DOMContentLoaded 裡那個 _userId 是區域變數，外面的函式讀不到。
+// 寫回報到紀錄要帶身分過去，所以另外存一份全域的。
+let scannerUid = '';
 
 
 // ══ 初始化 ═════════════════════════════════════════════
@@ -238,6 +255,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     _userId = '';
   }
 
+  scannerUid = _userId;
   document.getElementById('ev-sub').textContent = 'UID: ' + _userId;
 
   if (!_userId) {
@@ -529,6 +547,37 @@ function go(tab) {
 }
 function loading(t) { document.getElementById('ld-t').textContent=t||'處理中...'; document.getElementById('ld').classList.add('on'); }
 function unload() { document.getElementById('ld').classList.remove('on'); }
+// 把現場的報到紀錄抄進 QR票券紀錄。
+// 後端只寫報到時間和掃描人員兩欄，所以這裡不需要擋重複按。
+async function saveCheckinLog() {
+  const btn = document.getElementById('sl-btn');
+  const box = document.getElementById('sl-res');
+  btn.disabled = true;
+  btn.textContent = '寫入中...';
+  box.className = 'sl-r';
+  box.textContent = '';
+  try {
+    const r = await fetch(GAS + '?action=saveCheckinLog&userId=' + encodeURIComponent(scannerUid));
+    const d = await r.json();
+    if (d.status === 'ok' || d.status === 'warn') {
+      box.className = 'sl-r ' + (d.status === 'warn' ? '' : 'ok');
+      box.textContent = d.message || '已寫回。';
+      toast('已寫回 ' + (d.written || 0) + ' 筆');
+    } else {
+      box.className = 'sl-r err';
+      box.textContent = d.message || '寫回失敗。';
+      toast('寫回失敗');
+    }
+  } catch (e) {
+    // 連線失敗不等於沒寫進去，也不等於資料不見了——講清楚是哪一種。
+    box.className = 'sl-r err';
+    box.textContent = '連線失敗，不確定有沒有寫進去。現場名單還在，可以再按一次確認。';
+    toast('連線失敗');
+  }
+  btn.disabled = false;
+  btn.textContent = '寫回報到紀錄';
+}
+
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('on'); setTimeout(()=>t.classList.remove('on'),2200); }
 function vib(p) { if(navigator.vibrate) navigator.vibrate(p); }
 
